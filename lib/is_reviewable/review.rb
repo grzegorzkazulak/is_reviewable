@@ -32,7 +32,7 @@ module IsReviewable
     # Named scopes: Filters.
     scope :since,               lambda { |created_at_datetime|  {:conditions => ['created_at >= ?', created_at_datetime]} }
     scope :recent,              lambda { |arg|
-                                        if [::ActiveSupport::TimeWithZone, ::DateTime].any? { |c| c.is_a?(arg) }
+                                        if [::ActiveSupport::TimeWithZone, ::DateTime].any? { |c| arg.is_a?(c) }
                                           {:conditions => ['created_at >= ?', arg]}
                                         else
                                           {:limit => arg.to_i}
