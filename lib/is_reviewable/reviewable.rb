@@ -247,7 +247,7 @@ module IsReviewable
       # * <tt>:reviewer/:user/:account</tt> - identify with a reviewer-model (e.g. User, ...)
       #
       def reviewed_by?(identifiers)
-        self.reviews.exists?(:conditions => reviewer_conditions(identifiers))
+        self.reviews.exists?(reviewer_conditions(identifiers))
       end
       alias :is_reviewed_by? :reviewed_by?
       
