@@ -80,48 +80,66 @@ module IsReviewable
             raise InvalidReviewerError, "Reviewer class #{class_name} not defined, needs to be defined. #{e}"
           end
         end
-        
+
         # Assocations: Reviewer class(es) (e.g. User, Account, ...).
         options[:reviewer_classes].each do |reviewer_class|
           if ::Object.const_defined?(reviewer_class.name.to_sym)
+            reviewable = self
             reviewer_class.class_eval do
-              #has_many  :reviews, :as => :reviewer, :dependent  => :delete_all
-              has_many :reviews,
-                :foreign_key => :reviewer_id,
-                :class_name => options[:review_class].name
-              # Polymorphic has-many-through not supported (has_many :reviewables, :through => :reviews), so:
-              # TODO: Implement with :join
-              def reviewables(*args)
-                query_options = args.extract_options!
-                query_options[:include] = [:reviewable]
-                query_options.reverse_merge!(:conditions => Support.polymorphic_conditions_for(self, :reviewer))
-                
-                ::Review.find(:all, query_options).collect! { |review| review.reviewable }
+              options = { :through => :reviews, :source => :reviewable, :source_type => "#{reviewable.name}" }
+
+              # Handle the case when a Review has a Review. Useful for 'liking' Reviews.
+              if reviewable.name == ASSOCIATION_CLASS.name
+                options = {
+                  :class_name => "#{reviewable.name}",
+                  :finder_sql => %Q{
+                    SELECT "#{reviewable.table_name}".*
+                    FROM "#{reviewable.table_name}"
+                    INNER JOIN "reviews" AS r
+                    ON "#{reviewable.table_name}".id = "r".reviewable_id
+                    AND "r".reviewable_type = "#{reviewable.name}"
+                    WHERE (("#{reviewable.table_name}".reviewer_id = #\{id\}) AND ("#{reviewable.table_name}".reviewer_type = '#{reviewer_class.name}'))
+                  }
+                }
               end
+
+              has_many :reviews, :as => :reviewer, :dependent => :destroy
+              has_many :"#{reviewable.table_name.singularize}_reviewables", options
+            end
+
+            options = { :through => :reviews, :source => :reviewer, :source_type => "#{reviewer_class.name}" }
+
+            # Handle the case when a Review has a Review. Useful for 'liking' Reviews.
+            if reviewable.name == ASSOCIATION_CLASS.name
+              options = {
+                :class_name => "#{reviewer_class.name}",
+                :finder_sql => %Q{
+                  SELECT "#{reviewer_class.table_name}".*
+                  FROM "#{reviewer_class.table_name}"
+                  INNER JOIN "reviews" AS r
+                  ON "#{reviewer_class.table_name}".id = "r".reviewer_id
+                  AND "r".reviewer_type = "#{reviewer_class.name}"
+                  WHERE (("r".reviewable_id = #\{reviewable_id\}) AND ("r".reviewable_type = '#\{reviewable_type\}'))
+                }
+              }
+            end
+
+            reviewable.class_eval do
+              has_many :"#{reviewer_class.table_name.singularize}_reviewers", options
             end
           end
         end
-        
+
         # Assocations: Reviewable class (self) (e.g. Page).
         self.class_eval do
-          has_many :reviews, :as => :reviewable, :dependent => :delete_all
-          
-          # Polymorphic has-many-through not supported (has_many :reviewers, :through => :reviews), so:
-          # TODO: Implement with :join
-          def reviewers(*args)
-            query_options = args.extract_options!
-            query_options[:include] = [:reviewer]
-            query_options.reverse_merge!(:conditions => Support.polymorphic_conditions_for(self, :reviewable))
-            
-            ::Review.find(:all, query_options).collect! { |review| review.reviewer }
-          end
-          
+          has_many :reviews, :as => :reviewable, :dependent => :destroy
+
           before_create :init_reviewable_caching_fields
-          
+
           include ::IsReviewable::Reviewable::InstanceMethods
           extend  ::IsReviewable::Reviewable::Finders
         end
-        
+
         # Save the initialized options for this class.
         self.write_inheritable_attribute :is_reviewable_options, options
         self.class_inheritable_reader :is_reviewable_options
