@@ -86,11 +86,11 @@ module IsReviewable
           if ::Object.const_defined?(reviewer_class.name.to_sym)
             reviewable = self
             reviewer_class.class_eval do
-              options = { :through => :reviews, :source => :reviewable, :source_type => "#{reviewable.name}" }
+              assoc_options = { :through => :reviews, :source => :reviewable, :source_type => "#{reviewable.name}" }
 
               # Handle the case when a Review has a Review. Useful for 'liking' Reviews.
               if reviewable.name == ASSOCIATION_CLASS.name
-                options = {
+                assoc_options = {
                   :class_name => "#{reviewable.name}",
                   :finder_sql => %Q{
                     SELECT "#{reviewable.table_name}".*
@@ -104,14 +104,14 @@ module IsReviewable
               end
 
               has_many :reviews, :as => :reviewer, :dependent => :destroy
-              has_many :"#{reviewable.table_name.singularize}_reviewables", options
+              has_many :"#{reviewable.table_name.singularize}_reviewables", assoc_options
             end
 
-            options = { :through => :reviews, :source => :reviewer, :source_type => "#{reviewer_class.name}" }
+            assoc_options = { :through => :reviews, :source => :reviewer, :source_type => "#{reviewer_class.name}" }
 
             # Handle the case when a Review has a Review. Useful for 'liking' Reviews.
             if reviewable.name == ASSOCIATION_CLASS.name
-              options = {
+              assoc_options = {
                 :class_name => "#{reviewer_class.name}",
                 :finder_sql => %Q{
                   SELECT "#{reviewer_class.table_name}".*
@@ -125,7 +125,7 @@ module IsReviewable
             end
 
             reviewable.class_eval do
-              has_many :"#{reviewer_class.table_name.singularize}_reviewers", options
+              has_many :"#{reviewer_class.table_name.singularize}_reviewers", assoc_options
             end
           end
         end
